@@ -3,8 +3,8 @@ import pandas as pd
 
 print("🔥 程式啟動成功")
 
-ODDS_API_KEY = "你的API"
-DISCORD_WEBHOOK = "你的Webhook"
+ODDS_API_KEY = "459db2b0ceca5d2103a479358f6b163b"
+DISCORD_WEBHOOK = "https://discord.com/api/webhooks/1492283303217070080/lbrvzppTz-h9EcshXSHue6NOtAJY31CjT1jWPmS0U_2MV8Ps1O1zp--rPuoGF9LlNNGk"
 
 def send(msg):
     r = requests.post(DISCORD_WEBHOOK, json={"content": msg})

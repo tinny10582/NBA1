@@ -1,210 +1,112 @@
 
-
-
-import time
 import requests
 import pandas as pd
-from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
-from webdriver_manager.chrome import ChromeDriverManager
-from selenium.webdriver.common.by import By
+import time
 
-print("🔥 程式啟動成功")
+# 👉 開關（重點）
+USE_REAL_TAIWAN = False   # True=抓台彩 / False=用國際盤
 
 ODDS_API_KEY = "459db2b0ceca5d2103a479358f6b163b"
 DISCORD_WEBHOOK = "https://discord.com/api/webhooks/1492283303217070080/lbrvzppTz-h9EcshXSHue6NOtAJY31CjT1jWPmS0U_2MV8Ps1O1zp--rPuoGF9LlNNGk"
 
+
 # ===============================
-# 🌏 中文翻譯
+# 🌏 NBA 30隊完整中文
 # ===============================
 team_zh = {
-    "Cleveland Cavaliers": "騎士",
-    "Atlanta Hawks": "老鷹",
-    "Boston Celtics": "塞爾提克",
-    "New York Knicks": "尼克",
-    "Toronto Raptors": "暴龍",
-    "Milwaukee Bucks": "公鹿",
-    "Miami Heat": "熱火",
-    "Chicago Bulls": "公牛",
-    "Los Angeles Lakers": "湖人",
-    "Golden State Warriors": "勇士",
-    "Phoenix Suns": "太陽",
-    "Denver Nuggets": "金塊",
-    "Dallas Mavericks": "獨行俠",
-    "Brooklyn Nets": "籃網",
-    "Memphis Grizzlies": "灰熊",
-    "Utah Jazz": "爵士",
-    "Houston Rockets": "火箭",
-    "San Antonio Spurs": "馬刺",
-    "Oklahoma City Thunder": "雷霆",
-    "Orlando Magic": "魔術",
-    "Detroit Pistons": "活塞",
-    "Charlotte Hornets": "黃蜂",
-    "Indiana Pacers": "溜馬",
-    "Washington Wizards": "巫師",
-    "Sacramento Kings": "國王",
-    "Portland Trail Blazers": "拓荒者",
-    "Los Angeles Clippers": "快艇",
-    "Minnesota Timberwolves": "灰狼",
-    "New Orleans Pelicans": "鵜鶘"
+    "Atlanta Hawks":"老鷹","Boston Celtics":"塞爾提克","Brooklyn Nets":"籃網",
+    "Charlotte Hornets":"黃蜂","Chicago Bulls":"公牛","Cleveland Cavaliers":"騎士",
+    "Dallas Mavericks":"獨行俠","Denver Nuggets":"金塊","Detroit Pistons":"活塞",
+    "Golden State Warriors":"勇士","Houston Rockets":"火箭","Indiana Pacers":"溜馬",
+    "Los Angeles Clippers":"快艇","Los Angeles Lakers":"湖人","Memphis Grizzlies":"灰熊",
+    "Miami Heat":"熱火","Milwaukee Bucks":"公鹿","Minnesota Timberwolves":"灰狼",
+    "New Orleans Pelicans":"鵜鶘","New York Knicks":"尼克","Oklahoma City Thunder":"雷霆",
+    "Orlando Magic":"魔術","Philadelphia 76ers":"76人","Phoenix Suns":"太陽",
+    "Portland Trail Blazers":"拓荒者","Sacramento Kings":"國王","San Antonio Spurs":"馬刺",
+    "Toronto Raptors":"暴龍","Utah Jazz":"爵士","Washington Wizards":"巫師"
 }
 
-
-
-# ===============================
-# 🌏 中文翻譯
-# ===============================
-team_zh = {
-    "Cleveland Cavaliers": "騎士",
-    "Atlanta Hawks": "老鷹",
-    "Boston Celtics": "塞爾提克",
-    "New York Knicks": "尼克",
-    "Toronto Raptors": "暴龍",
-    "Milwaukee Bucks": "公鹿",
-    "Miami Heat": "熱火",
-    "Chicago Bulls": "公牛",
-    "Los Angeles Lakers": "湖人",
-    "Golden State Warriors": "勇士",
-    "Phoenix Suns": "太陽",
-    "Denver Nuggets": "金塊",
-    "Dallas Mavericks": "獨行俠",
-    "Brooklyn Nets": "籃網",
-    "Memphis Grizzlies": "灰熊",
-    "Utah Jazz": "爵士",
-    "Houston Rockets": "火箭",
-    "San Antonio Spurs": "馬刺",
-    "Oklahoma City Thunder": "雷霆",
-    "Orlando Magic": "魔術",
-    "Detroit Pistons": "活塞",
-    "Charlotte Hornets": "黃蜂",
-    "Indiana Pacers": "溜馬",
-    "Washington Wizards": "巫師",
-    "Sacramento Kings": "國王",
-    "Portland Trail Blazers": "拓荒者",
-    "Los Angeles Clippers": "快艇",
-    "Minnesota Timberwolves": "灰狼",
-    "New Orleans Pelicans": "鵜鶘"
-}
-
-
-# ===============================
-# 📲 Discord
-# ===============================
 def send(msg):
     requests.post(DISCORD_WEBHOOK, json={"content": msg})
 
 # ===============================
 # 🌍 國際盤
 # ===============================
-def get_global():
-    url = f"https://api.the-odds-api.com/v4/sports/basketball_nba/odds/?apiKey={ODDS_API_KEY}&markets=spreads,totals,h2h"
-    res = requests.get(url)
-    if res.status_code != 200:
+def get_games():
+    url = f"https://api.the-odds-api.com/v4/sports/basketball_nba/odds/?apiKey={ODDS_API_KEY}&markets=spreads,totals"
+    r = requests.get(url)
+    if r.status_code != 200:
         return []
-    return res.json()
+    return r.json()
 
 # ===============================
-# 🇹🇼 Selenium抓台彩
+# 🇹🇼 真台彩（手動模式用）
 # ===============================
-def get_taiwan():
-
-    options = Options()
-    options.add_argument("--headless")
-    options.add_argument("--no-sandbox")
-
-    driver = webdriver.Chrome(ChromeDriverManager().install(), options=options)
-
-    driver.get("https://www.sportslottery.com.tw")
-
-    time.sleep(5)
-
-    games = []
-
-    try:
-        matches = driver.find_elements(By.CLASS_NAME, "match")
-
-        for m in matches:
-
-            teams = m.find_elements(By.CLASS_NAME, "team")
-            odds = m.find_elements(By.CLASS_NAME, "odds")
-
-            home = teams[1].text
-            away = teams[0].text
-
-            spread = float(odds[0].text)
-            total = float(odds[1].text)
-
-            games.append({
-                "home": home,
-                "away": away,
-                "spread": spread,
-                "total": total
-            })
-
-    except Exception as e:
-        print("台彩解析錯:", e)
-
-    driver.quit()
-    return games
+def get_real_taiwan():
+    print("⚠️ 這裡需 Selenium（僅本地用）")
+    return []
 
 # ===============================
-# 🧠 比對套利
+# 🧠 分析
 # ===============================
-def analyze(tw, global_data):
+def analyze(data):
 
     results = []
 
-    for g in tw:
+    for g in data:
 
-        home = g["home"]
-        away = g["away"]
+        home = g["home_team"]
+        away = g["away_team"]
 
-        spread_tw = g["spread"]
-        total_tw = g["total"]
+        spread = None
+        total = None
 
-        # 👉 找國際盤
-        spread_g = None
+        try:
+            for b in g["bookmakers"]:
+                for m in b["markets"]:
 
-        for gd in global_data:
-            if home in gd["home_team"]:
+                    if m["key"] == "spreads":
+                        for o in m["outcomes"]:
+                            if o["name"] == home:
+                                spread = o["point"]
 
-                for b in gd["bookmakers"]:
-                    for m in b["markets"]:
-                        if m["key"] == "spreads":
-                            for o in m["outcomes"]:
-                                if o["name"] == gd["home_team"]:
-                                    spread_g = o["point"]
-
-        if spread_g is None:
+                    if m["key"] == "totals":
+                        total = m["outcomes"][0]["point"]
+        except:
             continue
 
-        # =====================
-        # 🔥 核心套利
-        # =====================
+        if spread is None or total is None:
+            continue
 
-        diff = spread_tw - spread_g
+        # =========================
+        # 🔥 動態大小分（修正你問題）
+        # =========================
 
-        if diff <= -2:
+        if total >= 230:
+            ou = "小分（超高盤）"
+        elif total >= 222:
+            ou = "小分（高盤）"
+        elif total <= 210:
+            ou = "大分（低盤）"
+        else:
+            ou = "中性偏小"
+
+        # =========================
+        # 🔥 讓分
+        # =========================
+        if spread <= -8:
             pick = away
             prob = 0.65
-        elif diff >= 2:
+        elif spread >= 8:
             pick = home
             prob = 0.65
         else:
-            pick = home
+            pick = home if spread < 0 else away
             prob = 0.55
 
-        # 👉 大小
-        if total_tw > 228:
-            ou = "小分"
-        elif total_tw < 215:
-            ou = "大分"
-        else:
-            ou = "小分"
-
         results.append({
-            "match": f"{away} vs {home}",
-            "pick": pick,
+            "match": f"{team_zh.get(away,away)} vs {team_zh.get(home,home)}",
+            "pick": team_zh.get(pick,pick),
             "ou": ou,
             "prob": prob
         })
@@ -218,28 +120,24 @@ def main():
 
     print("🔥 系統啟動")
 
-    tw = get_taiwan()
-    global_data = get_global()
+    data = get_games()
 
-    if len(tw) == 0:
-        send("❌ 台彩抓不到")
+    if not data:
+        send("❌ 無資料")
         return
 
-    df = analyze(tw, global_data)
+    df = analyze(data)
 
     if df.empty:
-        send("❌ 無結果")
+        send("❌ 無分析")
         return
 
     df = df.sort_values(by="prob", ascending=False)
 
-    msg = "🔥【台彩套利版】🔥\n\n"
+    msg = "🔥【NBA台彩邏輯版】🔥\n\n"
 
     for _, r in df.iterrows():
-        msg += f"{r['match']}\n"
-        msg += f"👉 {r['pick']}\n"
-        msg += f"👉 {r['ou']}\n"
-        msg += f"👉 勝率:{round(r['prob']*100)}%\n\n"
+        msg += f"{r['match']}\n👉 {r['pick']} | {r['ou']}\n勝率:{round(r['prob']*100)}%\n\n"
 
     msg += "🔥串2\n"
     for _, r in df.head(2).iterrows():
@@ -249,4 +147,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

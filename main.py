@@ -6,32 +6,17 @@ print("🔥 程式啟動成功")
 ODDS_API_KEY = "459db2b0ceca5d2103a479358f6b163b"
 DISCORD_WEBHOOK = "https://discord.com/api/webhooks/1492283303217070080/lbrvzppTz-h9EcshXSHue6NOtAJY31CjT1jWPmS0U_2MV8Ps1O1zp--rPuoGF9LlNNGk"
 
-
 # ===============================
-# 📊 球隊數據
-# ===============================
-team_stats = {
-    "Lakers": {"off":115,"def":112,"home":1.05},
-    "Warriors": {"off":118,"def":115,"home":1.06},
-    "Celtics": {"off":117,"def":110,"home":1.07},
-    "Bucks": {"off":116,"def":111,"home":1.05},
-    "Nuggets": {"off":117,"def":112,"home":1.06},
-    "Heat": {"off":110,"def":108,"home":1.04},
-    "Suns": {"off":116,"def":113,"home":1.05},
-    "Clippers": {"off":114,"def":111,"home":1.05},
-}
-
-# ===============================
-# 📲 Discord
+# 📲 發送
 # ===============================
 def send(msg):
     requests.post(DISCORD_WEBHOOK, json={"content": msg})
 
 # ===============================
-# 📊 抓比賽
+# 📊 抓賽事
 # ===============================
 def get_games():
-    url = f"https://api.the-odds-api.com/v4/sports/basketball_nba/odds/?apiKey={ODDS_API_KEY}&regions=us"
+    url = f"https://api.the-odds-api.com/v4/sports/basketball_nba/odds/?apiKey={ODDS_API_KEY}&regions=us&markets=spreads,totals"
     res = requests.get(url)
 
     if res.status_code != 200:
@@ -40,24 +25,49 @@ def get_games():
     return res.json()
 
 # ===============================
-# 🧠 預測
+# 🧠 用盤口算勝率（關鍵）
 # ===============================
-def predict(home, away):
+def predict(game):
 
-    A = team_stats.get(home, {"off":112,"def":112,"home":1})
-    B = team_stats.get(away, {"off":112,"def":112,"home":1})
+    home = game["home_team"]
+    away = game["away_team"]
 
-    sh = (A["off"] + B["def"]) / 2
-    sa = (B["off"] + A["def"]) / 2
+    spread = None
+    total_line = None
 
-    sh *= A["home"]
+    try:
+        for book in game["bookmakers"]:
+            for m in book["markets"]:
 
-    total = sh + sa
-    diff = sh - sa
+                # 讓分
+                if m["key"] == "spreads":
+                    for o in m["outcomes"]:
+                        if o["name"] == home:
+                            spread = o["point"]
 
-    prob = 0.5 + diff / 25
+                # 大小分
+                if m["key"] == "totals":
+                    total_line = m["outcomes"][0]["point"]
 
-    return total, diff, prob
+    except:
+        pass
+
+    # 沒抓到盤口就跳過
+    if spread is None:
+        return None
+
+    # 👉 核心：讓分轉勝率
+    prob = 0.5 + (-spread / 14)
+
+    prob = max(min(prob, 0.75), 0.25)
+
+    # 勝負
+    winner = home if spread < 0 else away
+
+    # 大小分
+    ou = "大分" if total_line and total_line > 215 else "小分"
+
+    return winner, ou, prob
 
 # ===============================
 # ⭐ 信心
@@ -85,16 +95,15 @@ def main():
 
     for g in games:
 
-        home = g["home_team"]
-        away = g["away_team"]
+        res = predict(g)
 
-        total, diff, prob = predict(home, away)
+        if res is None:
+            continue
 
-        winner = home if diff > 0 else away
-        ou = "大分" if total > 215 else "小分"
+        winner, ou, prob = res
 
         results.append({
-            "match": f"{away} vs {home}",
+            "match": f"{g['away_team']} vs {g['home_team']}",
             "winner": winner,
             "ou": ou,
             "prob": prob,
@@ -104,20 +113,20 @@ def main():
     df = pd.DataFrame(results).sort_values(by="prob", ascending=False)
 
     # ===============================
-    # 📊 全場分析
+    # 📊 全場分析（中文）
     # ===============================
-    msg = "🔥【NBA全場預測】🔥\n━━━━━━━━━━\n\n"
+    msg = "🔥【NBA盤口分析（台彩用）】🔥\n━━━━━━━━━━\n\n"
 
     for _, r in df.iterrows():
         msg += f"{r['match']}\n"
-        msg += f"👉 勝負: {r['winner']}\n"
-        msg += f"👉 {r['ou']}\n"
-        msg += f"勝率:{round(r['prob']*100,1)}% {r['star']}\n\n"
+        msg += f"👉 推薦：{r['winner']}\n"
+        msg += f"👉 大小分：{r['ou']}\n"
+        msg += f"👉 勝率：約 {round(r['prob']*100,1)}% {r['star']}\n\n"
 
     # ===============================
     # 🔥 高勝率組合
     # ===============================
-    msg += "━━━━━━━━━━\n🔥高勝率推薦組合\n"
+    msg += "━━━━━━━━━━\n🔥高勝率組合\n"
 
     top2 = df.head(2)
     top3 = df.head(3)
@@ -130,7 +139,7 @@ def main():
     for _, r in top3.iterrows():
         msg += f"{r['winner']}（{r['match']}）\n"
 
-    msg += "\n━━━━━━━━━━\n⚠️ 挑星星多的優先下注"
+    msg += "\n━━━━━━━━━━\n⚠️ 優先選 ⭐⭐⭐"
 
     send(msg)
 

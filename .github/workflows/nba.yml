@@ -2,7 +2,12 @@ name: NBA Bot
 
 on:
   schedule:
-    - cron: '0 2 * * *'  # 每天
+    # 🟢 每天下午 2 點（台灣時間）
+    - cron: '0 6 * * *'
+
+    # 🟢 每天晚上 10 點（台灣時間，再更新一次）
+    - cron: '0 14 * * *'
+
   workflow_dispatch:
 
 jobs:
@@ -10,12 +15,16 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v3
+      - name: 下載程式碼
+        uses: actions/checkout@v3
 
-      - uses: actions/setup-python@v4
+      - name: 安裝 Python
+        uses: actions/setup-python@v4
         with:
           python-version: '3.10'
 
-      - run: pip install requests pandas
+      - name: 安裝套件
+        run: pip install requests pandas
 
-      - run: python main.py
+      - name: 執行 NBA 預測
+        run: python main.py

@@ -1,18 +1,13 @@
 
+
+
+
 import requests
 import pandas as pd
-import time
-
-# 👉 開關（重點）
-USE_REAL_TAIWAN = False   # True=抓台彩 / False=用國際盤
 
 ODDS_API_KEY = "459db2b0ceca5d2103a479358f6b163b"
 DISCORD_WEBHOOK = "https://discord.com/api/webhooks/1492283303217070080/lbrvzppTz-h9EcshXSHue6NOtAJY31CjT1jWPmS0U_2MV8Ps1O1zp--rPuoGF9LlNNGk"
 
-
-# ===============================
-# 🌏 NBA 30隊完整中文
-# ===============================
 team_zh = {
     "Atlanta Hawks":"老鷹","Boston Celtics":"塞爾提克","Brooklyn Nets":"籃網",
     "Charlotte Hornets":"黃蜂","Chicago Bulls":"公牛","Cleveland Cavaliers":"騎士",
@@ -29,29 +24,13 @@ team_zh = {
 def send(msg):
     requests.post(DISCORD_WEBHOOK, json={"content": msg})
 
-# ===============================
-# 🌍 國際盤
-# ===============================
 def get_games():
     url = f"https://api.the-odds-api.com/v4/sports/basketball_nba/odds/?apiKey={ODDS_API_KEY}&markets=spreads,totals"
-    r = requests.get(url)
-    if r.status_code != 200:
-        return []
-    return r.json()
+    return requests.get(url).json()
 
-# ===============================
-# 🇹🇼 真台彩（手動模式用）
-# ===============================
-def get_real_taiwan():
-    print("⚠️ 這裡需 Selenium（僅本地用）")
-    return []
-
-# ===============================
-# 🧠 分析
-# ===============================
 def analyze(data):
 
-    results = []
+    res = []
 
     for g in data:
 
@@ -61,83 +40,60 @@ def analyze(data):
         spread = None
         total = None
 
-        try:
-            for b in g["bookmakers"]:
-                for m in b["markets"]:
+        for b in g["bookmakers"]:
+            for m in b["markets"]:
 
-                    if m["key"] == "spreads":
-                        for o in m["outcomes"]:
-                            if o["name"] == home:
-                                spread = o["point"]
+                if m["key"] == "spreads":
+                    for o in m["outcomes"]:
+                        if o["name"] == home:
+                            spread = o["point"]
 
-                    if m["key"] == "totals":
-                        total = m["outcomes"][0]["point"]
-        except:
+                if m["key"] == "totals":
+                    total = m["outcomes"][0]["point"]
+
+        if spread is None:
             continue
 
-        if spread is None or total is None:
-            continue
+        # 🔥 台彩模擬
+        spread_tw = spread - 1.5
+        total_tw = total + 2
 
-        # =========================
-        # 🔥 動態大小分（修正你問題）
-        # =========================
+        # 🔥 套利
+        diff = spread_tw - spread
 
-        if total >= 230:
-            ou = "小分（超高盤）"
-        elif total >= 222:
-            ou = "小分（高盤）"
-        elif total <= 210:
-            ou = "大分（低盤）"
-        else:
-            ou = "中性偏小"
-
-        # =========================
-        # 🔥 讓分
-        # =========================
-        if spread <= -8:
+        if diff <= -2:
             pick = away
-            prob = 0.65
-        elif spread >= 8:
-            pick = home
             prob = 0.65
         else:
             pick = home if spread < 0 else away
             prob = 0.55
 
-        results.append({
+        # 🔥 大小分（動態）
+        if total_tw >= 230:
+            ou = "小分"
+        elif total_tw <= 210:
+            ou = "大分"
+        else:
+            ou = "小分"
+
+        res.append({
             "match": f"{team_zh.get(away,away)} vs {team_zh.get(home,home)}",
             "pick": team_zh.get(pick,pick),
             "ou": ou,
             "prob": prob
         })
 
-    return pd.DataFrame(results)
+    return pd.DataFrame(res)
 
-# ===============================
-# 🚀 主程式
-# ===============================
 def main():
 
-    print("🔥 系統啟動")
-
     data = get_games()
+    df = analyze(data).sort_values(by="prob", ascending=False)
 
-    if not data:
-        send("❌ 無資料")
-        return
-
-    df = analyze(data)
-
-    if df.empty:
-        send("❌ 無分析")
-        return
-
-    df = df.sort_values(by="prob", ascending=False)
-
-    msg = "🔥【NBA台彩邏輯版】🔥\n\n"
+    msg = "🔥NBA推薦\n\n"
 
     for _, r in df.iterrows():
-        msg += f"{r['match']}\n👉 {r['pick']} | {r['ou']}\n勝率:{round(r['prob']*100)}%\n\n"
+        msg += f"{r['match']}\n👉 {r['pick']} {r['ou']}\n\n"
 
     msg += "🔥串2\n"
     for _, r in df.head(2).iterrows():
@@ -145,5 +101,4 @@ def main():
 
     send(msg)
 
-if __name__ == "__main__":
-    main()
+main()

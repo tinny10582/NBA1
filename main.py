@@ -1,3 +1,4 @@
+
 import requests
 import pandas as pd
 import os
@@ -27,6 +28,7 @@ nba_zh = {
 }
 
 # ===============================
+# ===============================
 # 🌏 MLB中文（完整）
 # ===============================
 mlb_zh = {
@@ -47,12 +49,13 @@ mlb_zh = {
 # ===============================
 def send(msg):
     try:
+        print("📤 發送:", msg[:100])
         requests.post(DISCORD_WEBHOOK, json={"content": msg})
     except:
         print("❌ Discord失敗")
 
 # ===============================
-# 🌍 API
+# API
 # ===============================
 def get_nba():
     url = f"https://api.the-odds-api.com/v4/sports/basketball_nba/odds/?apiKey={ODDS_API_KEY}&markets=spreads,totals"
@@ -60,21 +63,19 @@ def get_nba():
     return res.json() if res.status_code == 200 else []
 
 def get_mlb():
-    url = f"https://api.the-odds-api.com/v4/sports/baseball_mlb/odds/?apiKey={ODDS_API_KEY}&markets=spreads,totals"
+    url = f"https://api.the-odds-api.com/v4/sports/baseball_mlb/odds/?apiKey={ODDS_API_KEY}&markets=totals"
     res = requests.get(url)
     return res.json() if res.status_code == 200 else []
 
 # ===============================
-# 🧠 勝率模型
+# 勝率模型
 # ===============================
 def winrate_spread(s):
     s = abs(s)
-    if s >= 11: return 0.72
-    elif s >= 9: return 0.67
+    if s >= 9: return 0.67
     elif s >= 7: return 0.63
     elif s >= 5: return 0.58
-    elif s >= 3: return 0.54
-    else: return 0.50
+    else: return 0.52
 
 def winrate_total(t):
     if t >= 235: return ("小分", 0.63)
@@ -87,7 +88,7 @@ def star(p):
     else: return "⭐"
 
 # ===============================
-# 🧠 NBA分析
+# NBA分析
 # ===============================
 def analyze_nba(data):
 
@@ -98,8 +99,7 @@ def analyze_nba(data):
             home = g["home_team"]
             away = g["away_team"]
 
-            spread = None
-            total = None
+            spread, total = None, None
 
             for b in g.get("bookmakers", []):
                 for m in b.get("markets", []):
@@ -141,7 +141,7 @@ def analyze_nba(data):
     return pd.DataFrame(results)
 
 # ===============================
-# 🧠 MLB分析
+# MLB分析
 # ===============================
 def analyze_mlb(data):
 
@@ -174,7 +174,6 @@ def analyze_mlb(data):
             results.append({
                 "match": f"{mlb_zh.get(away,away)} vs {mlb_zh.get(home,home)}",
                 "pick": pick,
-                "bet": "大小分",
                 "prob": prob,
                 "star": star(prob)
             })
@@ -185,7 +184,7 @@ def analyze_mlb(data):
     return pd.DataFrame(results)
 
 # ===============================
-# 💾 存NBA預測
+# 儲存/讀取
 # ===============================
 def save_predictions(df):
     df.to_json(PREDICT_FILE, orient="records", force_ascii=False)
@@ -196,7 +195,7 @@ def load_predictions():
     return pd.read_json(PREDICT_FILE)
 
 # ===============================
-# 📊 NBA驗證
+# NBA驗證
 # ===============================
 def check_results():
 
@@ -205,95 +204,70 @@ def check_results():
         send("❌ 沒預測紀錄")
         return
 
-    url = f"https://api.the-odds-api.com/v4/sports/basketball_nba/scores/?apiKey={ODDS_API_KEY}&daysFrom=1"
-    res = requests.get(url)
-
-    if res.status_code != 200:
-        return
-
-    data = res.json()
-
     win, lose = 0, 0
-    msg = "📊【NBA預測結果】\n━━━━━━━━━━\n\n"
+
+    msg = "📊【NBA命中率】\n━━━━━━━━━━\n\n"
 
     for _, p in preds.iterrows():
-        for g in data:
+        msg += f"👉 {p['match']}\n"
 
-            home = g["home_team"]
-            away = g["away_team"]
+    msg += "\n（驗證API可再升級）"
 
-            match = f"{nba_zh.get(away,away)} vs {nba_zh.get(home,home)}"
-
-            if match == p["match"]:
-
-                try:
-                    hs = int(g["scores"][0]["score"])
-                    as_ = int(g["scores"][1]["score"])
-                except:
-                    continue
-
-                winner = home if hs > as_ else away
-                winner_zh = nba_zh.get(winner,winner)
-
-                if winner_zh == p["pick"]:
-                    msg += f"✔ {match}\n"
-                    win += 1
-                else:
-                    msg += f"❌ {match}\n"
-                    lose += 1
-
-    total = win + lose
-    rate = round(win/total*100,1) if total>0 else 0
-
-    msg += f"\n━━━━━━━━━━\n🎯 命中率 {rate}% ({win}/{total})"
     send(msg)
 
 # ===============================
-# 🚀 主程式（時間控制）
+# 主程式
 # ===============================
 def main():
 
     now = datetime.datetime.utcnow() + datetime.timedelta(hours=8)
     hour = now.hour
 
+    force_run = True  # 🔥 手動測試開關（測試完改False）
+
     print("目前時間:", hour)
 
-    # 🟢 凌晨1點 → NBA
-    if hour == 1:
+    # =========================
+    # NBA
+    # =========================
+    if hour == 1 or force_run:
+
+        print("🔥 NBA執行")
 
         data = get_nba()
         df = analyze_nba(data)
 
         if df.empty:
             send("❌ NBA無比賽")
-            return
+        else:
+            save_predictions(df)
 
-        save_predictions(df)
+            msg = "🔥【NBA預測】🔥\n━━━━━━━━━━\n\n"
 
-        msg = "🔥【NBA今日預測】🔥\n━━━━━━━━━━\n\n"
+            for _, r in df.head(5).iterrows():
+                msg += f"{r['match']}\n👉 {r['bet']}：{r['pick']} {r['star']}\n\n"
 
-        for _, r in df.head(8).iterrows():
-            msg += f"{r['match']}\n👉 {r['bet']}：{r['pick']}\n👉 {round(r['prob']*100,1)}% {r['star']}\n\n"
+            send(msg)
 
-        send(msg)
-        return
+    # =========================
+    # MLB
+    # =========================
+    if hour == 18 or force_run:
 
-    # 🔵 晚上6點 → MLB + NBA驗證
-    if hour == 18:
+        print("🔥 MLB執行")
 
         data = get_mlb()
         df = analyze_mlb(data)
 
         if not df.empty:
-            msg = "⚾【MLB明日預測】⚾\n━━━━━━━━━━\n\n"
+            msg = "⚾【MLB預測】⚾\n━━━━━━━━━━\n\n"
 
-            for _, r in df.head(6).iterrows():
+            for _, r in df.head(5).iterrows():
                 msg += f"{r['match']}\n👉 {r['pick']} {r['star']}\n\n"
 
             send(msg)
 
         check_results()
-        return
 
 # ===============================
 if __name__ == "__main__":

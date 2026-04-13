@@ -1,14 +1,11 @@
-name: NBA Bot
+name: Sports Bot
 
 on:
   schedule:
-    # 🟢 下午2點（台灣）→ 預測
-    - cron: '0 6 * * *'
+    # 🟢 台灣 01:00 → NBA預測
+    - cron: '0 17 * * *'
 
-    # 🟢 晚上10點（台灣）→ 預測再更新
-    - cron: '0 14 * * *'
-
-    # 🔥 新增👇 晚上6點（台灣）→ 驗證結果
+    # 🔵 台灣 18:00 → MLB + NBA驗證
     - cron: '0 10 * * *'
 
   workflow_dispatch:
@@ -29,5 +26,5 @@ jobs:
       - name: 安裝套件
         run: pip install requests pandas
 
-      - name: 執行 NBA 系統
+      - name: 執行系統
         run: python main.py
